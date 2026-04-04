@@ -1,5 +1,6 @@
 import os
 import re
+from typing import Optional
 
 import pandas as pd
 from rapidfuzz import fuzz
@@ -70,7 +71,7 @@ def _candidate_strings_from_ocr(raw: str) -> list[str]:
     return out
 
 
-def _match_medicine(ocr_text: str):
+def _match_medicine(ocr_text: str, min_score: Optional[int] = None):
     """
     Returns (match_dict | None, meta) where meta has best_score, best_medicine, preview.
     """
@@ -86,6 +87,8 @@ def _match_medicine(ocr_text: str):
             "preview": "",
             "reason": "no_text",
         }
+
+    threshold = _MATCH_THRESHOLD if min_score is None else min_score
 
     translated = _safe_translate_to_en(raw)
     combined_haystack = _normalize(translated + " " + raw)
@@ -113,7 +116,7 @@ def _match_medicine(ocr_text: str):
             best_score = s
             best_med = med
 
-    if best_score >= _MATCH_THRESHOLD and best_med is not None:
+    if best_score >= threshold and best_med is not None:
         row = df[df["medicine"] == best_med].iloc[0]
         return (
             {
@@ -144,13 +147,13 @@ def _match_medicine(ocr_text: str):
     }
 
 
-def get_medicine_info_with_meta(ocr_text):
+def get_medicine_info_with_meta(ocr_text, min_score: Optional[int] = None):
     """Same as get_medicine_info but returns (result_dict | None, meta) for error messages."""
-    return _match_medicine(ocr_text)
+    return _match_medicine(ocr_text, min_score=min_score)
 
 
-def get_medicine_info(ocr_text):
-    result, _ = _match_medicine(ocr_text)
+def get_medicine_info(ocr_text, min_score: Optional[int] = None):
+    result, _ = _match_medicine(ocr_text, min_score=min_score)
     return result
 
 

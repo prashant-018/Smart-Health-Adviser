@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchNearbyHospitals } from "../services/api";
+import { fetchNearbyHospitals, normalizeNearbyHospital } from "../services/api";
 
 function MapPinIcon({ className }) {
   return (
@@ -11,15 +11,24 @@ function MapPinIcon({ className }) {
   );
 }
 
+/** First number in a string like "011-123; 456" for tel: href */
+function phoneDialHref(phone) {
+  if (!phone || typeof phone !== "string") return null;
+  const first = phone.split(";")[0].trim();
+  const digits = first.replace(/[^\d+]/g, "");
+  return digits.length >= 5 ? `tel:${digits}` : null;
+}
+
 export default function NearbyHospitalsModal({ open, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hospitals, setHospitals] = useState([]);
+  const fetchGenerationRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
 
-    let cancelled = false;
+    const generation = ++fetchGenerationRef.current;
 
     const run = () => {
       setLoading(true);
@@ -34,22 +43,25 @@ export default function NearbyHospitalsModal({ open, onClose }) {
 
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          if (cancelled) return;
+          if (generation !== fetchGenerationRef.current) return;
           try {
             const data = await fetchNearbyHospitals(
               position.coords.latitude,
               position.coords.longitude
             );
-            if (cancelled) return;
-            setHospitals(Array.isArray(data.hospitals) ? data.hospitals : []);
+            if (generation !== fetchGenerationRef.current) return;
+            const raw = Array.isArray(data.hospitals) ? data.hospitals : [];
+            setHospitals(raw.map(normalizeNearbyHospital));
           } catch {
-            if (!cancelled) setError("Could not reach the server. Check that the API is running.");
+            if (generation === fetchGenerationRef.current) {
+              setError("Could not reach the server. Check that the API is running.");
+            }
           } finally {
-            if (!cancelled) setLoading(false);
+            if (generation === fetchGenerationRef.current) setLoading(false);
           }
         },
         () => {
-          if (!cancelled) {
+          if (generation === fetchGenerationRef.current) {
             setError("Location permission is needed to find hospitals near you.");
             setLoading(false);
           }
@@ -59,9 +71,6 @@ export default function NearbyHospitalsModal({ open, onClose }) {
     };
 
     run();
-    return () => {
-      cancelled = true;
-    };
   }, [open]);
 
   useEffect(() => {
@@ -154,6 +163,21 @@ export default function NearbyHospitalsModal({ open, onClose }) {
                           {h.rating && h.rating !== "N/A" ? ` · Rating: ${h.rating}` : ""}
                         </span>
                       </span>
+                    </p>
+                  ) : null}
+                  {h.phone ? (
+                    <p className="mt-2 text-sm text-slate-700">
+                      <span className="font-medium text-slate-800">Phone: </span>
+                      {phoneDialHref(h.phone) ? (
+                        <a
+                          href={phoneDialHref(h.phone)}
+                          className="font-medium text-cyan-600 underline-offset-2 hover:text-cyan-700 hover:underline"
+                        >
+                          {h.phone}
+                        </a>
+                      ) : (
+                        <span>{h.phone}</span>
+                      )}
                     </p>
                   ) : null}
                   {h.maps_link ? (

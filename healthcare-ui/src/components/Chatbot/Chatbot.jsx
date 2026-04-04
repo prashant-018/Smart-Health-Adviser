@@ -6,6 +6,7 @@ import { useVoiceInput } from "../../hooks/useVoiceInput";
 import {
   fetchNearbyHospitals as fetchNearbyHospitalsApi,
   fetchChatReply,
+  normalizeNearbyHospital,
 } from "../../services/api";
 import ChatMessages from "./ChatMessages";
 import InputBar from "./InputBar";
@@ -28,25 +29,35 @@ export default function Chatbot() {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
 
-      const data = await fetchNearbyHospitalsApi(lat, lng);
+      try {
+        const data = await fetchNearbyHospitalsApi(lat, lng);
+        const rows = Array.isArray(data.hospitals) ? data.hospitals.map(normalizeNearbyHospital) : [];
 
-      const hospitalList = data.hospitals.map((hospital) => {
-        if (!hospital.maps_link) {
-          return hospital.name;
-        }
+        const hospitalList = rows.map((hospital) => {
+          if (!hospital.maps_link) {
+            return hospital.name;
+          }
 
-        return `${hospital.name}
-📍 Distance: ${hospital.distance} km
+          const phoneLine = hospital.phone ? `\n📞 Phone: ${hospital.phone}` : "";
+
+          return `${hospital.name}
+📍 Distance: ${hospital.distance} km${phoneLine}
 MAP_LINK:${hospital.maps_link}`;
-      });
+        });
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "bot",
-          text: "Nearby Hospitals:\n\n" + hospitalList.join("\n\n")
-        }
-      ]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "bot",
+            text: "Nearby Hospitals:\n\n" + hospitalList.join("\n\n"),
+          },
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { sender: "bot", text: "Could not load nearby hospitals. Is the API server running?" },
+        ]);
+      }
     });
   };
 
@@ -54,19 +65,16 @@ MAP_LINK:${hospital.maps_link}`;
     if (!input.trim()) return;
 
     setMessages((prev) => [...prev, { sender: "user", text: input }]);
-
     setLoading(true);
 
     try {
       const data = await fetchChatReply(input);
-
       setMessages((prev) => [...prev, { sender: "bot", text: data.reply }]);
 
       if (data.confidence && data.confidence >= 20) {
         const confirmVisit = window.confirm(
           "Symptoms may indicate a health issue. Consult a doctor soon.\n\nFind nearby hospitals?"
         );
-
         if (confirmVisit) {
           findNearbyHospitals();
         }
