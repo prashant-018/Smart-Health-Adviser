@@ -1,24 +1,29 @@
 import React, { useState, useEffect } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import NearbyHospitalsModal from "./NearbyHospitalsModal";
-
-const navLinks = [
-  { label: "Home", to: "/" },
-  { label: "About", to: "/about" },
-  { label: "Upload lab report", to: "/upload-lab-report" },
-  { label: "Upload medicine", to: "/upload-medicine" },
-  { label: "Contact us", to: "/contact" },
-];
-
-const navLinkClass = ({ isActive }) =>
-  `text-sm font-medium transition-colors hover:text-cyan-600 ${
-    isActive ? "text-cyan-600" : "text-slate-500"
-  }`;
+import LanguageSelector from "./LanguageSelector";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [nearbyOpen, setNearbyOpen] = useState(false);
   const location = useLocation();
+  const { t } = useLanguage();
+
+  const navLinks = [
+    { label: t("home"), to: "/" },
+    { label: t("about"), to: "/about" },
+    { label: `${t("bodyMap")} `, to: "/body-map" },
+    { label: t("uploadLabReport"), to: "/upload-lab-report" },
+    { label: t("uploadMedicine"), to: "/upload-medicine" },
+    { label: t("skinDetector"), to: "/skin-detector" },
+    { label: t("contactUs"), to: "/contact" },
+  ];
+
+  const navLinkClass = ({ isActive }) =>
+    `text-sm font-medium transition-colors hover:text-cyan-600 ${
+      isActive ? "text-cyan-600" : "text-slate-500"
+    }`;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -57,14 +62,17 @@ export default function SiteHeader() {
           ))}
         </nav>
 
-        <button
-          type="button"
-          onClick={() => setNearbyOpen(true)}
-          className="hidden items-center gap-1.5 rounded-md bg-pink-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700 md:inline-flex"
-        >
-          <span aria-hidden>📍</span>
-          Find nearby hospital
-        </button>
+        <div className="flex items-center gap-3">
+          <LanguageSelector />
+          <button
+            type="button"
+            onClick={() => setNearbyOpen(true)}
+            className="hidden items-center gap-1.5 rounded-md bg-pink-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700 md:inline-flex"
+          >
+            <span aria-hidden>📍</span>
+            {t("findNearbyHospital")}
+          </button>
+        </div>
       </div>
       <div className="border-t border-slate-100 px-4 pb-4 md:hidden">
         <button
@@ -73,7 +81,7 @@ export default function SiteHeader() {
           className="flex w-full items-center justify-center gap-1.5 rounded-md bg-pink-600 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700"
         >
           <span aria-hidden>📍</span>
-          Find nearby hospital
+          {t("findNearbyHospital")}
         </button>
       </div>
 
