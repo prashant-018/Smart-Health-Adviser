@@ -4,6 +4,31 @@ import configure_tesseract
 
 configure_tesseract.ensure_tesseract()
 
+# ── Load .env for GEMINI_API_KEY ──────────────────────────────────────────────
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — set GEMINI_API_KEY manually in environment
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Gemini toggle ─────────────────────────────────────────────────────────────
+# Set USE_GEMINI = False to instantly revert to original behaviour everywhere.
+USE_GEMINI = True
+try:
+    from gemini_helper import (
+        enrich_symptom_response,
+        analyze_skin_with_gemini,
+        analyze_lab_with_gemini,
+        identify_medicine_with_gemini,
+        identify_medicine_image_with_gemini,
+    )
+    print("[Gemini] helper loaded ✓")
+except Exception as _gemini_import_err:
+    USE_GEMINI = False
+    print(f"[Gemini] helper not available — using original logic. ({_gemini_import_err})")
+# ─────────────────────────────────────────────────────────────────────────────
+
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 import pickle
@@ -470,6 +495,19 @@ Side Effects: {medicine_result['side_effects']}"""
             return jsonify({"reply": msg, "confidence": 0})
 
         disease_result, confidence = predict_disease(detected_symptoms, language)
+
+        # ── Gemini enrichment (runs on top of ML result, never replaces fallback) ──
+        if USE_GEMINI and confidence > 0:
+            gemini_reply = enrich_symptom_response(
+                user_message=user_input,
+                ml_disease=disease_result.split("\n")[0].replace("Possible disease: ", "").strip(),
+                ml_confidence=confidence,
+                language=language,
+            )
+            if gemini_reply:
+                return jsonify({"reply": gemini_reply, "confidence": confidence, "powered_by": "Gemini"})
+        # ─────────────────────────────────────────────────────────────────────────
+
         return jsonify({"reply": disease_result, "confidence": confidence})
 
     except Exception as e:
@@ -488,6 +526,15 @@ def upload_medicine_image():
 
         filepath = "temp.jpg"
         file.save(filepath)
+
+        # ── Gemini Vision reads the image directly (better than OCR) ─────────
+        if USE_GEMINI:
+            file.seek(0)
+            image_bytes = file.read()
+            gemini_reply = identify_medicine_image_with_gemini(image_bytes)
+            if gemini_reply:
+                return jsonify({"reply": gemini_reply, "powered_by": "Gemini"})
+        # ─────────────────────────────────────────────────────────────────────
 
         extracted_text = extract_text(filepath)
         print("OCR detected:", extracted_text)
@@ -541,8 +588,14 @@ def upload_lab_report():
             file.save(filepath)
             text = extract_text_from_image(filepath)
 
-        summary = analyze_lab_report(text)
+        # ── Gemini enriches the lab report analysis ───────────────────────────
+        if USE_GEMINI:
+            gemini_reply = analyze_lab_with_gemini(text)
+            if gemini_reply:
+                return jsonify({"reply": gemini_reply, "powered_by": "Gemini"})
+        # ─────────────────────────────────────────────────────────────────────
 
+        summary = analyze_lab_report(text)
         return jsonify({"reply": summary})
     except Exception as e:
         import traceback
@@ -710,6 +763,14 @@ def detect_skin_disease():
             return jsonify({"error": "No file selected."}), 400
 
         image_bytes = file.read()
+
+        # ── Gemini Vision analyzes skin image ─────────────────────────────────
+        if USE_GEMINI:
+            gemini_result = analyze_skin_with_gemini(image_bytes)
+            if gemini_result:
+                return jsonify(gemini_result)
+        # ─────────────────────────────────────────────────────────────────────
+
         result = analyze_skin_image(image_bytes)
         return jsonify(result)
     except Exception as e:

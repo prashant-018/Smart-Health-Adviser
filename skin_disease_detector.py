@@ -1,10 +1,3 @@
-"""
-Skin condition detector using color and texture analysis with PIL.
-No external model download required — works fully offline and instantly.
-
-Analyzes dominant skin tone, redness, texture variance, and spot patterns
-to suggest the most likely skin condition category.
-"""
 
 import numpy as np
 from PIL import Image, ImageFilter
