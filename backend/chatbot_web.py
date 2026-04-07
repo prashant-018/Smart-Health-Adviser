@@ -29,6 +29,7 @@ except Exception as _gemini_import_err:
     print(f"[Gemini] helper not available — using original logic. ({_gemini_import_err})")
 # ─────────────────────────────────────────────────────────────────────────────
 
+import os
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 import pickle
@@ -53,12 +54,21 @@ from deep_translator import GoogleTranslator
 app = Flask(__name__)
 app.secret_key = "healthcare_chatbot_secret_key_2024"
 
-_FRONTEND_ORIGINS = [
+_DEFAULT_FRONTEND_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# Comma-separated allowlist. Example:
+# FRONTEND_ORIGINS=http://localhost:5173,https://smart-health-adviser-x38t.vercel.app
+_env_origins = os.environ.get("FRONTEND_ORIGINS", "").strip()
+_FRONTEND_ORIGINS = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins
+    else _DEFAULT_FRONTEND_ORIGINS
+)
 # Do not restrict allow_headers: multipart/form-data preflights need the right headers.
 # Upload routes catch exceptions and return JSON so responses still get CORS headers.
 CORS(
@@ -458,8 +468,23 @@ Other possible conditions: {', '.join(similar) if similar else 'None'}"""
 
     return response, confidence
 
-@app.route("/")
-def home():
+@app.get("/")
+def healthcheck():
+    """
+    Healthcheck endpoint for Render. Use this to verify the service is up.
+    """
+    return jsonify(
+        {
+            "ok": True,
+            "service": "smart-health-adviser-backend",
+            "routes": ["/chat", "/upload_lab_report", "/upload_medicine_image", "/detect_skin_disease", "/nearby_hospitals"],
+        }
+    )
+
+
+@app.get("/web")
+def web_ui():
+    """Legacy demo page (optional)."""
     return render_template("chat.html")
 
 @app.route("/chat", methods=["POST"])
