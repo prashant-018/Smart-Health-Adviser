@@ -69,11 +69,36 @@ _FRONTEND_ORIGINS = (
     if _env_origins
     else _DEFAULT_FRONTEND_ORIGINS
 )
+
+# Optional comma-separated regex patterns for origins (useful for Vercel preview URLs).
+# Example:
+# FRONTEND_ORIGINS_REGEX=https://.*\\.vercel\\.app
+_env_origin_regex = os.environ.get("FRONTEND_ORIGINS_REGEX", "").strip()
+_FRONTEND_ORIGINS_REGEX = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
+
+
+def _is_allowed_origin(origin: str) -> bool:
+    if not origin:
+        return False
+    if origin in _FRONTEND_ORIGINS:
+        return True
+    # Safety default: allow Vercel preview domains only when explicitly enabled
+    # via FRONTEND_ORIGINS_REGEX, to avoid accidentally allowing all origins.
+    if _FRONTEND_ORIGINS_REGEX:
+        import re
+
+        for pat in _FRONTEND_ORIGINS_REGEX:
+            try:
+                if re.match(pat, origin):
+                    return True
+            except re.error:
+                continue
+    return False
 # Do not restrict allow_headers: multipart/form-data preflights need the right headers.
 # Upload routes catch exceptions and return JSON so responses still get CORS headers.
 CORS(
     app,
-    origins=_FRONTEND_ORIGINS,
+    origins=_is_allowed_origin,
     supports_credentials=True,
     allow_headers="*",
     methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE"],

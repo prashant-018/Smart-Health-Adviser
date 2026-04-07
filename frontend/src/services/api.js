@@ -1,6 +1,7 @@
 // Call Flask directly. The simple "proxy" field in package.json often does not forward these
 // POST routes (404 + HTML body → JSON parse error). Flask CORS allows http://localhost:3000.
-const BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
+const RAW_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
+const BASE = String(RAW_BASE).replace(/\/+$/, "");
 
 /** Merge phone / Phone / phones[] from API into a single display string */
 export function normalizeNearbyHospital(h) {
