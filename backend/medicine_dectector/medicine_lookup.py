@@ -3,7 +3,6 @@ import re
 from typing import Optional
 
 import pandas as pd
-from rapidfuzz import fuzz
 from deep_translator import GoogleTranslator
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +27,45 @@ def _safe_translate_to_en(text: str) -> str:
 def _normalize(s: str) -> str:
     return " ".join(s.lower().split())
 
+def _ratio(a: str, b: str) -> int:
+    """
+    Return a 0-100 similarity score.
+    Prefers rapidfuzz when available; falls back to difflib (no extra deps).
+    """
+    try:
+        from rapidfuzz import fuzz  # type: ignore
+        return int(fuzz.ratio(a, b))
+    except Exception:
+        from difflib import SequenceMatcher
+        return int(round(100 * SequenceMatcher(None, a, b).ratio()))
+
+
+def _partial_ratio(needle: str, haystack: str) -> int:
+    """
+    Best-effort partial ratio (short needle inside longer haystack).
+    Uses rapidfuzz when available; otherwise approximates with token window matching.
+    """
+    needle = _normalize(needle)
+    haystack = _normalize(haystack)
+    if not needle or not haystack:
+        return 0
+    try:
+        from rapidfuzz import fuzz  # type: ignore
+        return int(fuzz.partial_ratio(needle, haystack))
+    except Exception:
+        n_tokens = needle.split()
+        h_tokens = haystack.split()
+        if len(h_tokens) <= len(n_tokens):
+            return _ratio(needle, haystack)
+        win = max(1, len(n_tokens))
+        best = 0
+        for i in range(0, len(h_tokens) - win + 1):
+            chunk = " ".join(h_tokens[i : i + win])
+            best = max(best, _ratio(needle, chunk))
+            if best >= 99:
+                break
+        return best
+
 
 def _score_medicine_in_text(medicine_name: str, haystack: str) -> int:
     """Score how well a database medicine name appears in OCR-like text."""
@@ -36,10 +74,9 @@ def _score_medicine_in_text(medicine_name: str, haystack: str) -> int:
     m = medicine_name.strip().lower()
     h = haystack.lower()
     # partial_ratio: short drug name vs long label (critical fix vs WRatio on full blob)
-    pr = fuzz.partial_ratio(m, h)
-    ts = fuzz.token_set_ratio(m, h)
-    wr = fuzz.WRatio(m, h)
-    return max(pr, ts, wr)
+    pr = _partial_ratio(m, h)
+    ts = _ratio(m, h)
+    return max(pr, ts)
 
 
 def _candidate_strings_from_ocr(raw: str) -> list[str]:
