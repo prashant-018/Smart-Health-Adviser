@@ -4,14 +4,14 @@
 
 ```
 Smart-Health-Adviser/
-├── backend/          ← Python / Flask API
+├── backend/          ← Python / Flask API (single source of truth)
 │   ├── chatbot_web.py
 │   ├── disease_model/
 │   ├── medicine_dectector/
 │   ├── requirements.txt
 │   └── .env.example
 │
-├── frontend/         ← React UI
+├── frontend/         ← React UI (single source of truth)
 │   ├── src/
 │   ├── public/
 │   ├── package.json
@@ -36,6 +36,13 @@ npm install
 npm start
 ```
 Runs at: http://localhost:3000
+
+## Deploy (Vercel)
+
+- **Root Directory**: `frontend`
+- **Install Command**: `npm install`
+- **Build Command**: `npm run build`
+- **Output Directory**: `build`
 
 ## Deploy on AWS
 - Backend → EC2 (run with gunicorn)

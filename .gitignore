@@ -1,0 +1,24 @@
+.env
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# local temp artifacts
+temp*.jpg
+temp*.png
+temp*.webp
+temp*.pdf
+
+# frontend artifacts
+frontend/node_modules/
+frontend/build/
+healthcare-ui/node_modules/
+healthcare-ui/build/
+
+# editor
+.vscode/
+

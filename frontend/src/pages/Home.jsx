@@ -83,7 +83,7 @@ export default function Home() {
               </ul>
             </div>
 
-            <div className="relative order-1 flex justify-center lg:order-2 lg:justify-end">
+            <div className="relative order-1 flex justify-center px-2 lg:order-2 lg:justify-end">
               <div
                 className="pointer-events-none absolute inset-0 -right-8 -z-10 opacity-40 bg-[radial-gradient(circle,_rgb(165_243_252)_1.5px,_transparent_1.5px)] bg-[length:18px_18px]"
                 aria-hidden
@@ -93,11 +93,11 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
               </div>
-              <div className="relative w-full max-w-md">
+              <div className="relative w-full max-w-md overflow-hidden rounded-2xl shadow-xl ring-1 ring-slate-200/60 bg-white">
                 <img
                   src="https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?auto=format&fit=crop&w=900&q=80"
                   alt="Healthcare professionals"
-                  className="relative z-10 w-full rounded-2xl object-cover shadow-xl ring-1 ring-slate-200/60"
+                  className="relative z-10 w-full h-auto object-contain"
                 />
               </div>
             </div>
