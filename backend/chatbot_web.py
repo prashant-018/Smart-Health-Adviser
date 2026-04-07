@@ -260,7 +260,32 @@ symptom_alias = {
     "sweating": "sweating",
 }
 
-from rapidfuzz import fuzz
+try:
+    from rapidfuzz import fuzz  # type: ignore
+except Exception:
+    fuzz = None
+
+
+def _partial_ratio(a: str, b: str) -> int:
+    """0-100 similarity score; rapidfuzz when available, else difflib fallback."""
+    if not a or not b:
+        return 0
+    if fuzz is not None:
+        return int(fuzz.partial_ratio(a, b))
+
+    from difflib import SequenceMatcher
+
+    a = a.lower()
+    b = b.lower()
+    if len(a) > len(b):
+        a, b = b, a
+    win = max(1, len(a))
+    best = 0.0
+    for i in range(0, len(b) - win + 1):
+        best = max(best, SequenceMatcher(None, a, b[i : i + win]).ratio())
+        if best >= 0.99:
+            break
+    return int(round(best * 100))
 
 def normalize_symptoms(user_text, columns):
 
