@@ -8,6 +8,7 @@ pillow
 deep-translator
 pytesseract
 pdf2image
+pdfplumber
 opencv-python
 requests
 google-generativeai==0.8.6
