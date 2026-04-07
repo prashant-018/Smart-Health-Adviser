@@ -1,0 +1,13 @@
+flask
+flask-cors
+scikit-learn
+pandas
+numpy
+pillow
+deep-translator
+pytesseract
+pdf2image
+opencv-python-headless
+requests
+google-generativeai
+python-dotenv

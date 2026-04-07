@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Healthcare AI Assistant</title>
+<style>
+
+body {
+    font-family: Arial;
+    background: #f5f7fa;
+}
+
+.chat-container {
+    width: 60%;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0px 0px 10px gray;
+}
+
+.chatbox {
+    height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.user {
+    color: blue;
+}
+
+.bot {
+    color: green;
+}
+
+button {
+    padding: 8px 15px;
+    border: none;
+    background: #007BFF;
+    color: white;
+    border-radius: 5px;
+}
+
+</style>
+</head>
+<body>
+<div class="chat-container">
+<h2>Healthcare AI Chatbot 🤖</h2>
+
+<div id="chatbox" class="chatbox"></div>
+
+<input id="message" type="text" placeholder="Type symptoms or medicine name">
+<button onclick="sendMessage()">Send</button>
+
+<br><br>
+
+<input type="file" id="imageInput">
+<button onclick="uploadImage()">Upload Medicine Image</button>
+
+</div>
+
+<script>
+
+async function sendMessage() {
+
+    let msg = document.getElementById("message").value;
+
+    let chatbox = document.getElementById("chatbox");
+
+    chatbox.innerHTML += `<p class="user"><b>You:</b> ${msg}</p>`;
+
+    let response = await fetch("/chat", {
+
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ message: msg })
+
+    });
+
+    let data = await response.json();
+
+    chatbox.innerHTML += `<p class="bot"><b>Bot:</b><br>${data.reply.replace(/\n/g,"<br>")}</p>`;
+}
+
+
+async function uploadImage() {
+
+    let fileInput = document.getElementById("imageInput");
+
+    let formData = new FormData();
+
+    formData.append("image", fileInput.files[0]);
+
+    let response = await fetch("/upload_medicine_image", {
+
+        method: "POST",
+        body: formData
+
+    });
+
+    let data = await response.json();
+
+    let chatbox = document.getElementById("chatbox");
+
+    chatbox.innerHTML += `<p class="bot"><b>Bot:</b><br>${data.reply.replace(/\n/g,"<br>")}</p>`;
+}
+
+</script>
+
+</body>
+</html>
