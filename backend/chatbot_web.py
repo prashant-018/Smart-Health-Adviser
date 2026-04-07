@@ -293,7 +293,7 @@ def normalize_symptoms(user_text, columns):
     # dataset matching
     formatted_columns = [c.replace("_", " ") for c in columns]
     for col, formatted in zip(columns, formatted_columns):
-        score = fuzz.partial_ratio(formatted, text)
+        score = _partial_ratio(formatted, text)
 
         if score > 90:
             detected.append(col)
