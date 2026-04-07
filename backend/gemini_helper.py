@@ -13,29 +13,33 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        from google import genai
-        _client = genai.Client(api_key=GEMINI_API_KEY)
+        if not GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+
+        # Use the official google-generativeai SDK (installed as `google-generativeai`)
+        # Import path: `google.generativeai`
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        _client = genai
     return _client
 
 MODEL = "gemini-2.5-flash"
 
 def _generate(prompt: str) -> str:
     client = _get_client()
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    return response.text.strip()
+    response = client.GenerativeModel(MODEL).generate_content(prompt)
+    return (getattr(response, "text", "") or "").strip()
 
 def _generate_with_image(prompt: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
-    from google import genai
-    from google.genai import types
     client = _get_client()
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+    model = client.GenerativeModel(MODEL)
+    response = model.generate_content(
+        [
+            {"mime_type": mime_type, "data": image_bytes},
             prompt,
-        ],
+        ]
     )
-    return response.text.strip()
+    return (getattr(response, "text", "") or "").strip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

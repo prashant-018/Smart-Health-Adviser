@@ -1,13 +1,13 @@
 flask
 flask-cors
-scikit-learn
+scikit-learn==1.7.2
 pandas
 numpy
 pillow
 deep-translator
 pytesseract
 pdf2image
-opencv-python-headless
+opencv-python
 requests
-google-generativeai
+google-generativeai==0.8.6
 python-dotenv
