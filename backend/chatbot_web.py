@@ -54,59 +54,66 @@ app.secret_key = "healthcare_chatbot_secret_key_2024"
 # Render captures stdout/stderr; Python logging will show in Render logs.
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 
-# ── CORS origin configuration ────────────────────────────────────────────────
-# Known production + local development origins (used when FRONTEND_ORIGINS is not set).
-_DEFAULT_FRONTEND_ORIGINS = [
-    # ── Vercel production ──────────────────────────────────────────────────────
+# ── CORS (Render + Vercel production-ready) ──────────────────────────────────
+# Temporary allow-all (for debugging only):
+#   CORS_ALLOW_ALL=1
+_cors_allow_all = os.environ.get("CORS_ALLOW_ALL", "").strip() in ("1", "true", "True", "yes", "YES")
+
+# Exact origins (recommended). On Render set:
+#   FRONTEND_ORIGINS=https://smart-health-adviser.vercel.app,https://your-custom-domain.com
+_default_frontend_origins = [
     "https://smart-health-adviser.vercel.app",
-    # ── Local development ──────────────────────────────────────────────────────
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
-
-# Override on Render → Environment Variables (comma-separated for multiple):
-#   FRONTEND_ORIGINS=https://smart-health-adviser.vercel.app,https://custom-domain.com
 _env_origins = os.environ.get("FRONTEND_ORIGINS", "").strip()
-_FRONTEND_ORIGINS = (
+_frontend_origins = (
     [o.strip() for o in _env_origins.split(",") if o.strip()]
     if _env_origins
-    else _DEFAULT_FRONTEND_ORIGINS
+    else _default_frontend_origins
 )
 
-# Regex to allow ALL Vercel preview/branch-deploy URLs automatically.
-# Override on Render → Environment Variables:
-#   FRONTEND_ORIGINS_REGEX=https://.*\.vercel\.app
-# Set to empty string to disable:  FRONTEND_ORIGINS_REGEX=
+# Regex origins (for Vercel previews). On Render set:
+#   FRONTEND_ORIGINS_REGEX=^https://.*\\.vercel\\.app$
+# Set to empty string to disable:
+#   FRONTEND_ORIGINS_REGEX=
 _env_origin_regex = os.environ.get("FRONTEND_ORIGINS_REGEX", "").strip()
 if _env_origin_regex == "":
-    # Env var explicitly set to empty → disable regex (production lock-down mode)
-    _FRONTEND_ORIGINS_REGEX = []
+    _frontend_origin_patterns = []
 elif _env_origin_regex:
-    _FRONTEND_ORIGINS_REGEX = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
+    _frontend_origin_patterns = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
 else:
-    # Env var not set at all → use safe default: allow all *.vercel.app previews
-    _FRONTEND_ORIGINS_REGEX = [r"https://.*\.vercel\.app"]
+    # Default: allow all Vercel preview/branch deploy URLs.
+    _frontend_origin_patterns = [r"^https://.*\.vercel\.app$"]
 
-# Merge exact origins + regex patterns into one list.
-# Flask-CORS handles both plain strings and regex strings in a list correctly.
-# NOTE: Never pass a callable/function as `origins` — Flask-CORS cannot iterate it.
-_ALL_ALLOWED_ORIGINS = _FRONTEND_ORIGINS + _FRONTEND_ORIGINS_REGEX
+_all_allowed_origins = _frontend_origins + _frontend_origin_patterns
 
-print(f"[CORS] Allowed origins: {_FRONTEND_ORIGINS}")
-print(f"[CORS] Allowed origin patterns: {_FRONTEND_ORIGINS_REGEX}")
+print(f"[CORS] allow_all={_cors_allow_all}")
+print(f"[CORS] allowed_origins={_frontend_origins}")
+print(f"[CORS] allowed_origin_patterns={_frontend_origin_patterns}")
 
-# Do not restrict allow_headers: multipart/form-data preflights need correct headers.
-# Upload routes catch exceptions and return JSON so responses still get CORS headers.
-CORS(
-    app,
-    origins=_ALL_ALLOWED_ORIGINS,           # ✅ list of strings (exact + regex)
-    supports_credentials=True,
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-    methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE"],
-    max_age=600,                             # cache preflight for 10 min
-)
+if _cors_allow_all:
+    # NOTE: When using allow-all, do NOT use credentials.
+    CORS(
+        app,
+        resources={r"/*": {"origins": "*"}},
+        supports_credentials=False,
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE"],
+        max_age=600,
+    )
+else:
+    # Production-safe: allow only your frontend + Vercel previews.
+    CORS(
+        app,
+        origins=_all_allowed_origins,  # exact origins + regex patterns
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE"],
+        max_age=600,
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 
 _LAB_ALLOWED_EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
