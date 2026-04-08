@@ -54,6 +54,8 @@ from deep_translator import GoogleTranslator
 app = Flask(__name__)
 app.secret_key = "healthcare_chatbot_secret_key_2024"
 
+# ── CORS origin configuration ────────────────────────────────────────────────
+# Default origins for local development
 _DEFAULT_FRONTEND_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -61,8 +63,10 @@ _DEFAULT_FRONTEND_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
-# Comma-separated allowlist. Example:
-# FRONTEND_ORIGINS=http://localhost:5173,https://smart-health-adviser-x38t.vercel.app
+# Set FRONTEND_ORIGINS env var on Render with your exact Vercel production URL, e.g.:
+#   FRONTEND_ORIGINS=https://smart-health-adviser-x38t.vercel.app
+# Multiple origins: comma-separated
+#   FRONTEND_ORIGINS=https://yourapp.vercel.app,https://custom-domain.com
 _env_origins = os.environ.get("FRONTEND_ORIGINS", "").strip()
 _FRONTEND_ORIGINS = (
     [o.strip() for o in _env_origins.split(",") if o.strip()]
@@ -70,39 +74,32 @@ _FRONTEND_ORIGINS = (
     else _DEFAULT_FRONTEND_ORIGINS
 )
 
-# Optional comma-separated regex patterns for origins (useful for Vercel preview URLs).
-# Example:
-# FRONTEND_ORIGINS_REGEX=https://.*\\.vercel\\.app
+# Optional: support Vercel preview/branch URLs via regex (set FRONTEND_ORIGINS_REGEX).
+# Example: FRONTEND_ORIGINS_REGEX=https://.*\.vercel\.app
+# Flask-CORS accepts regex strings mixed into the origins list.
 _env_origin_regex = os.environ.get("FRONTEND_ORIGINS_REGEX", "").strip()
-_FRONTEND_ORIGINS_REGEX = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
+_FRONTEND_ORIGINS_REGEX = (
+    [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
+    if _env_origin_regex
+    else []
+)
 
+# Merge exact origins + regex patterns into one list.
+# Flask-CORS correctly handles both plain strings and regex strings in a list.
+# NOTE: Do NOT pass a callable/function as `origins` — Flask-CORS cannot iterate it.
+_ALL_ALLOWED_ORIGINS = _FRONTEND_ORIGINS + _FRONTEND_ORIGINS_REGEX
 
-def _is_allowed_origin(origin: str) -> bool:
-    if not origin:
-        return False
-    if origin in _FRONTEND_ORIGINS:
-        return True
-    # Safety default: allow Vercel preview domains only when explicitly enabled
-    # via FRONTEND_ORIGINS_REGEX, to avoid accidentally allowing all origins.
-    if _FRONTEND_ORIGINS_REGEX:
-        import re
-
-        for pat in _FRONTEND_ORIGINS_REGEX:
-            try:
-                if re.match(pat, origin):
-                    return True
-            except re.error:
-                continue
-    return False
-# Do not restrict allow_headers: multipart/form-data preflights need the right headers.
+# Do not restrict allow_headers: multipart/form-data preflights need correct headers.
 # Upload routes catch exceptions and return JSON so responses still get CORS headers.
 CORS(
     app,
-    origins=_is_allowed_origin,
+    origins=_ALL_ALLOWED_ORIGINS,           # ✅ list of strings (exact + regex)
     supports_credentials=True,
-    allow_headers="*",
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
     methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE"],
+    max_age=600,                             # cache preflight for 10 min
 )
+# ─────────────────────────────────────────────────────────────────────────────
 
 #model loading
 model = pickle.load(open("disease_model/model.pkl", "rb"))
