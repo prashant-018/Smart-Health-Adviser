@@ -1,12 +1,4 @@
 import pdfplumber
-import pytesseract
-import configure_tesseract
-
-configure_tesseract.ensure_tesseract()
-
-import cv2
-import numpy as np
-from PIL import Image
 import re
 
 
@@ -37,18 +29,10 @@ def extract_text_from_pdf(filepath):
 
 
 def extract_text_from_image(filepath):
-
-    img = cv2.imread(filepath)
-    if img is None:
-        # Wrong extension vs bytes, PNG/WebP, etc. — OpenCV often returns None.
-        pil = Image.open(filepath).convert("RGB")
-        img = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    text = pytesseract.image_to_string(gray)
-
-    return text.lower()
+    raise RuntimeError(
+        "Image-to-text extraction via Tesseract has been removed. "
+        "Use Groq-based direct lab report analysis instead."
+    )
 
 
 import re

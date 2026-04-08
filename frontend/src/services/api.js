@@ -68,7 +68,17 @@ export async function postLabReport(formData) {
     body: formData,
   });
   if (!response.ok) {
-    throw new Error(`/upload_lab_report failed: ${response.status} ${response.statusText}`);
+    let detail = "";
+    try {
+      const data = await response.json();
+      detail = data?.error?.message || data?.reply || JSON.stringify(data);
+      const reqId = data?.request_id ? ` (request_id: ${data.request_id})` : "";
+      throw new Error(`/upload_lab_report failed: ${response.status} ${detail}${reqId}`);
+    } catch (e) {
+      // If response isn't JSON, fall back to status text.
+      if (e instanceof Error && e.message.includes("/upload_lab_report failed:")) throw e;
+      throw new Error(`/upload_lab_report failed: ${response.status} ${response.statusText}`);
+    }
   }
   return response.json();
 }

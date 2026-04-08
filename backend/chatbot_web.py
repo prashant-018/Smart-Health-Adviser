@@ -1,35 +1,37 @@
 from os.path import splitext
 
-import configure_tesseract
-
-configure_tesseract.ensure_tesseract()
-
-# ── Load .env for GEMINI_API_KEY ──────────────────────────────────────────────
+# ── Load .env for local development (Render uses env vars) ────────────────────
 try:
-    from dotenv import load_dotenv
-    load_dotenv()
+    from dotenv import load_dotenv, find_dotenv
+    # Explicitly locate .env relative to current working directory.
+    # On Render, .env is not present, so this is a no-op.
+    load_dotenv(find_dotenv(usecwd=True), override=True)
 except ImportError:
-    pass  # python-dotenv not installed — set GEMINI_API_KEY manually in environment
+    pass  # python-dotenv not installed — set env vars manually
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Gemini toggle ─────────────────────────────────────────────────────────────
-# Set USE_GEMINI = False to instantly revert to original behaviour everywhere.
-USE_GEMINI = True
+# ── Groq toggle ───────────────────────────────────────────────────────────────
+USE_GROQ = True
 try:
-    from gemini_helper import (
+    from groq_helper import (
         enrich_symptom_response,
-        analyze_skin_with_gemini,
-        analyze_lab_with_gemini,
-        identify_medicine_with_gemini,
-        identify_medicine_image_with_gemini,
+        analyze_skin_with_groq,
+        analyze_lab_text_with_groq,
+        analyze_lab_document_with_groq,
+        GroqCallError,
+        identify_medicine_image_with_groq,
+        key_fingerprint,
     )
-    print("[Gemini] helper loaded ✓")
+    print("[Groq] helper loaded")
+    print(f"[Groq] key: {key_fingerprint()}")
 except Exception as _gemini_import_err:
-    USE_GEMINI = False
-    print(f"[Gemini] helper not available — using original logic. ({_gemini_import_err})")
+    USE_GROQ = False
+    print(f"[Groq] helper not available - using original logic. ({_gemini_import_err!r})")
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
+import logging
+import uuid
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 import pickle
@@ -37,22 +39,20 @@ import pandas as pd
 import numpy as np
 from disease_model.precautions import precautions
 from disease_model.home_remedies import get_home_remedies_for_disease
-from medicine_dectector.medicine_ocr import extract_text
 from medicine_dectector.medicine_lookup import (
     get_medicine_info,
     get_medicine_info_with_meta,
     format_medicine_not_found_reply,
 )
-from lab_report_analyzer import (
-    extract_text_from_pdf,
-    extract_text_from_image,
-    analyze_lab_report
-)
+from lab_report_analyzer import analyze_lab_report
 from skin_disease_detector import analyze_skin_image
 from deep_translator import GoogleTranslator
 
 app = Flask(__name__)
 app.secret_key = "healthcare_chatbot_secret_key_2024"
+
+# Render captures stdout/stderr; Python logging will show in Render logs.
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 
 # ── CORS origin configuration ────────────────────────────────────────────────
 # Known production + local development origins (used when FRONTEND_ORIGINS is not set).
@@ -108,6 +108,25 @@ CORS(
     max_age=600,                             # cache preflight for 10 min
 )
 # ─────────────────────────────────────────────────────────────────────────────
+
+_LAB_ALLOWED_EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+_LAB_MAX_BYTES = int(os.environ.get("LAB_UPLOAD_MAX_BYTES", str(8 * 1024 * 1024)))  # 8MB default
+
+def _lab_mime_from_ext(ext: str) -> str:
+    e = (ext or "").lower()
+    if e == ".pdf":
+        return "application/pdf"
+    if e in (".jpg", ".jpeg"):
+        return "image/jpeg"
+    if e == ".png":
+        return "image/png"
+    if e == ".webp":
+        return "image/webp"
+    if e == ".bmp":
+        return "image/bmp"
+    if e in (".tif", ".tiff"):
+        return "image/tiff"
+    return "application/octet-stream"
 
 #model loading
 model = pickle.load(open("disease_model/model.pkl", "rb"))
@@ -576,16 +595,16 @@ Side Effects: {medicine_result['side_effects']}"""
 
         disease_result, confidence = predict_disease(detected_symptoms, language)
 
-        # ── Gemini enrichment (runs on top of ML result, never replaces fallback) ──
-        if USE_GEMINI and confidence > 0:
-            gemini_reply = enrich_symptom_response(
+        # ── Groq enrichment (runs on top of ML result, never replaces fallback) ──
+        if USE_GROQ and confidence > 0:
+            groq_reply = enrich_symptom_response(
                 user_message=user_input,
                 ml_disease=disease_result.split("\n")[0].replace("Possible disease: ", "").strip(),
                 ml_confidence=confidence,
                 language=language,
             )
-            if gemini_reply:
-                return jsonify({"reply": gemini_reply, "confidence": confidence, "powered_by": "Gemini"})
+            if groq_reply:
+                return jsonify({"reply": groq_reply, "confidence": confidence, "powered_by": "Groq"})
         # ─────────────────────────────────────────────────────────────────────────
 
         return jsonify({"reply": disease_result, "confidence": confidence})
@@ -603,33 +622,25 @@ def upload_medicine_image():
         file = request.files["image"]
         if not file or not getattr(file, "filename", None):
             return jsonify({"reply": "No file selected."}), 400
+        if not USE_GROQ:
+            return jsonify({
+                "reply": "Medicine image analysis is temporarily unavailable (Groq not configured).",
+                "error": {"code": "GROQ_NOT_CONFIGURED"}
+            }), 503
 
-        filepath = "temp.jpg"
-        file.save(filepath)
+        image_bytes = file.read()
+        if not image_bytes:
+            return jsonify({"reply": "Empty image upload."}), 400
 
-        # ── Gemini Vision reads the image directly (better than OCR) ─────────
-        if USE_GEMINI:
-            file.seek(0)
-            image_bytes = file.read()
-            gemini_reply = identify_medicine_image_with_gemini(image_bytes)
-            if gemini_reply:
-                return jsonify({"reply": gemini_reply, "powered_by": "Gemini"})
-        # ─────────────────────────────────────────────────────────────────────
+        mime = (getattr(file, "mimetype", None) or "image/jpeg").lower()
+        reply = identify_medicine_image_with_groq(image_bytes, mime_type=mime)
+        if reply:
+            return jsonify({"reply": reply, "powered_by": "Groq"})
 
-        extracted_text = extract_text(filepath)
-        print("OCR detected:", extracted_text)
-        result, meta = get_medicine_info_with_meta(extracted_text)
-
-        if result:
-            response = f"""
-            Medicine: {result['medicine']}
-            Uses: {result['uses']}
-            Dosage: {result['dosage']}
-            Side Effects: {result['side_effects']}
-        """
-            return jsonify({"reply": response})
-
-        return jsonify({"reply": format_medicine_not_found_reply(meta)})
+        return jsonify({
+            "reply": "Could not analyze the medicine image right now. Please try again with a clearer photo.",
+            "error": {"code": "GROQ_NO_RESPONSE"}
+        }), 502
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -638,48 +649,77 @@ def upload_medicine_image():
 @app.route("/upload_lab_report", methods=["POST"])
 def upload_lab_report():
     try:
+        req_id = uuid.uuid4().hex[:12]
         if "file" not in request.files:
-            return jsonify({"reply": "No file received. Choose a file first."}), 400
+            return jsonify({"reply": "No file received. Choose a file first.", "request_id": req_id}), 400
         file = request.files["file"]
         if not file or not getattr(file, "filename", None):
-            return jsonify({"reply": "No file selected."}), 400
+            return jsonify({"reply": "No file selected.", "request_id": req_id}), 400
 
         filename = file.filename.lower()
 
         ext = splitext(filename)[1].lower()
         if not ext:
             return jsonify({
-                "reply": "File must have an extension (e.g. .pdf, .png, .jpg)."
+                "reply": "File must have an extension (e.g. .pdf, .png, .jpg).",
+                "request_id": req_id,
             }), 400
-        if ext not in (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"):
+        if ext not in _LAB_ALLOWED_EXTS:
             return jsonify({
-                "reply": "Unsupported file type. Upload a PDF or image (JPG, PNG, WEBP, etc.)."
+                "reply": "Unsupported file type. Upload a PDF or image (JPG, PNG, WEBP, etc.).",
+                "request_id": req_id,
             }), 400
 
         if ext == ".jpeg":
             ext = ".jpg"
+        mime_type = _lab_mime_from_ext(ext)
 
-        filepath = f"temp_report{ext}"
+        if not USE_GROQ:
+            return jsonify({
+                "reply": "Lab report analysis is temporarily unavailable (Groq not configured).",
+                "error": {"code": "GROQ_NOT_CONFIGURED"},
+                "request_id": req_id,
+            }), 503
 
-        if ext == ".pdf":
-            file.save(filepath)
-            text = extract_text_from_pdf(filepath)
-        else:
-            file.save(filepath)
-            text = extract_text_from_image(filepath)
+        # Read upload into memory with a hard cap (Render-friendly)
+        data = file.read(_LAB_MAX_BYTES + 1)
+        if not data:
+            return jsonify({"reply": "Empty file upload.", "request_id": req_id}), 400
+        if len(data) > _LAB_MAX_BYTES:
+            return jsonify({
+                "reply": f"File too large. Max allowed is {_LAB_MAX_BYTES // (1024 * 1024)}MB.",
+                "error": {"code": "FILE_TOO_LARGE", "max_bytes": _LAB_MAX_BYTES},
+                "request_id": req_id,
+            }), 413
 
-        # ── Gemini enriches the lab report analysis ───────────────────────────
-        if USE_GEMINI:
-            gemini_reply = analyze_lab_with_gemini(text)
-            if gemini_reply:
-                return jsonify({"reply": gemini_reply, "powered_by": "Gemini"})
-        # ─────────────────────────────────────────────────────────────────────
+        try:
+            groq_reply = analyze_lab_document_with_groq(data, mime_type=mime_type)
+        except GroqCallError as ge:
+            app.logger.exception(
+                "[%s] Groq failed for lab report (filename=%s mime=%s bytes=%s kind=%s)",
+                req_id, filename, mime_type, len(data), getattr(ge, "kind", "GROQ_ERROR")
+            )
+            return jsonify({
+                "reply": "Lab report analysis failed. Please try again in a moment.",
+                "error": {
+                    "code": getattr(ge, "kind", "GROQ_ERROR"),
+                    "message": str(ge) or "Groq request failed",
+                },
+                "request_id": req_id,
+            }), 502
 
-        summary = analyze_lab_report(text)
-        return jsonify({"reply": summary})
+        if groq_reply:
+            return jsonify({"reply": groq_reply, "powered_by": "Groq", "request_id": req_id})
+
+        return jsonify({
+            "reply": "Could not analyze the lab report right now. Please try again (or upload a clearer scan).",
+            "error": {"code": "GROQ_NO_RESPONSE"},
+            "request_id": req_id,
+        }), 502
     except Exception as e:
         import traceback
         traceback.print_exc()
+        app.logger.exception("Unhandled /upload_lab_report error")
         return jsonify({"reply": f"Could not process report: {str(e)}"}), 500
 
 def _phones_from_contact_block(contact):
@@ -844,11 +884,12 @@ def detect_skin_disease():
 
         image_bytes = file.read()
 
-        # ── Gemini Vision analyzes skin image ─────────────────────────────────
-        if USE_GEMINI:
-            gemini_result = analyze_skin_with_gemini(image_bytes)
-            if gemini_result:
-                return jsonify(gemini_result)
+        # ── Groq Vision analyzes skin image ───────────────────────────────────
+        if USE_GROQ:
+            mime = (getattr(file, "mimetype", None) or "image/jpeg").lower()
+            groq_result = analyze_skin_with_groq(image_bytes, mime_type=mime)
+            if groq_result:
+                return jsonify(groq_result)
         # ─────────────────────────────────────────────────────────────────────
 
         result = analyze_skin_image(image_bytes)

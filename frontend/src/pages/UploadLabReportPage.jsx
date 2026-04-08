@@ -27,8 +27,8 @@ export default function UploadLabReportPage() {
       formData.append("file", file);
       const data = await postLabReport(formData);
       setReply(data.reply || "");
-    } catch {
-      setReply("Something went wrong. Check that the API is running and try again.");
+    } catch (e) {
+      setReply(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
