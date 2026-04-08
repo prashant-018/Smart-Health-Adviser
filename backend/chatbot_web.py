@@ -55,18 +55,19 @@ app = Flask(__name__)
 app.secret_key = "healthcare_chatbot_secret_key_2024"
 
 # ── CORS origin configuration ────────────────────────────────────────────────
-# Default origins for local development
+# Known production + local development origins (used when FRONTEND_ORIGINS is not set).
 _DEFAULT_FRONTEND_ORIGINS = [
+    # ── Vercel production ──────────────────────────────────────────────────────
+    "https://smart-health-adviser.vercel.app",
+    # ── Local development ──────────────────────────────────────────────────────
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
-# Set FRONTEND_ORIGINS env var on Render with your exact Vercel production URL, e.g.:
-#   FRONTEND_ORIGINS=https://smart-health-adviser-x38t.vercel.app
-# Multiple origins: comma-separated
-#   FRONTEND_ORIGINS=https://yourapp.vercel.app,https://custom-domain.com
+# Override on Render → Environment Variables (comma-separated for multiple):
+#   FRONTEND_ORIGINS=https://smart-health-adviser.vercel.app,https://custom-domain.com
 _env_origins = os.environ.get("FRONTEND_ORIGINS", "").strip()
 _FRONTEND_ORIGINS = (
     [o.strip() for o in _env_origins.split(",") if o.strip()]
@@ -74,20 +75,27 @@ _FRONTEND_ORIGINS = (
     else _DEFAULT_FRONTEND_ORIGINS
 )
 
-# Optional: support Vercel preview/branch URLs via regex (set FRONTEND_ORIGINS_REGEX).
-# Example: FRONTEND_ORIGINS_REGEX=https://.*\.vercel\.app
-# Flask-CORS accepts regex strings mixed into the origins list.
+# Regex to allow ALL Vercel preview/branch-deploy URLs automatically.
+# Override on Render → Environment Variables:
+#   FRONTEND_ORIGINS_REGEX=https://.*\.vercel\.app
+# Set to empty string to disable:  FRONTEND_ORIGINS_REGEX=
 _env_origin_regex = os.environ.get("FRONTEND_ORIGINS_REGEX", "").strip()
-_FRONTEND_ORIGINS_REGEX = (
-    [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
-    if _env_origin_regex
-    else []
-)
+if _env_origin_regex == "":
+    # Env var explicitly set to empty → disable regex (production lock-down mode)
+    _FRONTEND_ORIGINS_REGEX = []
+elif _env_origin_regex:
+    _FRONTEND_ORIGINS_REGEX = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
+else:
+    # Env var not set at all → use safe default: allow all *.vercel.app previews
+    _FRONTEND_ORIGINS_REGEX = [r"https://.*\.vercel\.app"]
 
 # Merge exact origins + regex patterns into one list.
-# Flask-CORS correctly handles both plain strings and regex strings in a list.
-# NOTE: Do NOT pass a callable/function as `origins` — Flask-CORS cannot iterate it.
+# Flask-CORS handles both plain strings and regex strings in a list correctly.
+# NOTE: Never pass a callable/function as `origins` — Flask-CORS cannot iterate it.
 _ALL_ALLOWED_ORIGINS = _FRONTEND_ORIGINS + _FRONTEND_ORIGINS_REGEX
+
+print(f"[CORS] Allowed origins: {_FRONTEND_ORIGINS}")
+print(f"[CORS] Allowed origin patterns: {_FRONTEND_ORIGINS_REGEX}")
 
 # Do not restrict allow_headers: multipart/form-data preflights need correct headers.
 # Upload routes catch exceptions and return JSON so responses still get CORS headers.
