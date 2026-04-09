@@ -82,16 +82,15 @@ _frontend_origins = (
 
 # Regex origins (for Vercel previews). On Render set:
 #   FRONTEND_ORIGINS_REGEX=^https://.*\\.vercel\\.app$
-# Set to empty string to disable:
-#   FRONTEND_ORIGINS_REGEX=
-_env_origin_regex = os.environ.get("FRONTEND_ORIGINS_REGEX", "").strip()
-if _env_origin_regex == "":
-    _frontend_origin_patterns = []
-elif _env_origin_regex:
-    _frontend_origin_patterns = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
-else:
-    # Default: allow all Vercel preview/branch deploy URLs.
+# If the variable is not set, we allow Vercel preview/branch deploy URLs by default.
+# To disable this, set FRONTEND_ORIGINS_REGEX=disabled.
+_env_origin_regex = os.environ.get("FRONTEND_ORIGINS_REGEX")
+if _env_origin_regex is None or not _env_origin_regex.strip():
     _frontend_origin_patterns = [r"^https://.*\.vercel\.app$"]
+elif _env_origin_regex.strip().lower() in ("disabled", "disable", "off", "false", "0"):
+    _frontend_origin_patterns = []
+else:
+    _frontend_origin_patterns = [r.strip() for r in _env_origin_regex.split(",") if r.strip()]
 
 _all_allowed_origins = _frontend_origins + _frontend_origin_patterns
 

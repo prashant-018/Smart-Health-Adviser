@@ -8,7 +8,7 @@
 // IMPORTANT: REACT_APP_* vars are baked in at build time by Create React App.
 //            Changes only take effect after a new build/deploy.
 const LOCAL_BASE = "http://127.0.0.1:5000";
-const PROD_BASE = "https://smart-health-adviser-1.onrender.com";
+const PROD_BASE = "https://smart-health-adviser-3.onrender.com";
 
 function resolveBaseUrl() {
   const envBase = process.env.REACT_APP_API_BASE_URL;
