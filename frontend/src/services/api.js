@@ -7,8 +7,23 @@
 //
 // IMPORTANT: REACT_APP_* vars are baked in at build time by Create React App.
 //            Changes only take effect after a new build/deploy.
-const RAW_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
-const BASE = String(RAW_BASE).replace(/\/+$/, ""); // strip trailing slash
+const LOCAL_BASE = "http://127.0.0.1:5000";
+const PROD_BASE = "https://smart-health-adviser-1.onrender.com";
+
+function resolveBaseUrl() {
+  const envBase = process.env.REACT_APP_API_BASE_URL;
+  if (envBase) return envBase;
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+    return isLocalHost ? LOCAL_BASE : PROD_BASE;
+  }
+
+  return PROD_BASE;
+}
+
+const BASE = String(resolveBaseUrl()).replace(/\/+$/, ""); // strip trailing slash
 
 // Shared fetch options — credentials:"include" is REQUIRED when Flask uses
 // supports_credentials=True, otherwise the browser blocks the CORS response.
@@ -94,4 +109,3 @@ export async function postSkinImage(formData) {
   }
   return response.json();
 }
-

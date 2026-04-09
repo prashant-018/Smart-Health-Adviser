@@ -69,10 +69,15 @@ _default_frontend_origins = [
     "http://127.0.0.1:5173",
 ]
 _env_origins = os.environ.get("FRONTEND_ORIGINS", "").strip()
+
+def _normalize_origin(origin: str) -> str:
+    # Accept values with a trailing slash or path fragment from deployment env vars.
+    return origin.strip().rstrip("/")
+
 _frontend_origins = (
-    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    [_normalize_origin(o) for o in _env_origins.split(",") if o.strip()]
     if _env_origins
-    else _default_frontend_origins
+    else [_normalize_origin(o) for o in _default_frontend_origins]
 )
 
 # Regex origins (for Vercel previews). On Render set:
@@ -179,6 +184,7 @@ symptom_map_hi = {
     "सिर दर्द": "headache",
     "सर दर्द": "headache",
     "उल्टी": "vomiting",
+
     "चक्कर": "dizziness",
     "खांसी": "cough",
     "सर्दी": "cough",
