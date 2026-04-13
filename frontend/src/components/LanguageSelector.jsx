@@ -7,8 +7,8 @@ export default function LanguageSelector() {
   const dropdownRef = useRef(null);
 
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setIsOpen(false);
       }
     }
@@ -19,27 +19,39 @@ export default function LanguageSelector() {
   const currentLang = languages[language];
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative w-full max-w-[200px] sm:max-w-none" ref={dropdownRef}>
+      
+      {/* BUTTON */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50/50"
-        aria-label="Select language"
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
       >
-        <span className="text-base">{currentLang.flag}</span>
-        <span className="hidden sm:inline">{currentLang.nativeName}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span>{currentLang.flag}</span>
+
+          {/* Prevent overflow */}
+          <span className="truncate">
+            {currentLang.nativeName}
+          </span>
+        </div>
+
         <svg
-          className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`h-4 w-4 flex-shrink-0 transition ${
+            isOpen ? "rotate-180" : ""
+          }`}
           fill="none"
-          viewBox="0 0 24 24"
           stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
+      {/* DROPDOWN */}
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="max-h-80 overflow-y-auto">
+        <div className="absolute z-50 mt-2 w-full min-w-[180px] max-w-[280px] overflow-hidden rounded-lg border bg-white shadow-lg">
+          
+          <div className="max-h-60 overflow-y-auto">
             {Object.entries(languages).map(([code, lang]) => (
               <button
                 key={code}
@@ -47,20 +59,22 @@ export default function LanguageSelector() {
                   setLanguage(code);
                   setIsOpen(false);
                 }}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-cyan-50 ${
-                  language === code ? "bg-cyan-50 font-semibold text-cyan-700" : "text-slate-700"
+                className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${
+                  language === code
+                    ? "bg-cyan-100 font-medium text-cyan-700"
+                    : "hover:bg-gray-100"
                 }`}
               >
-                <span className="text-lg">{lang.flag}</span>
-                <div className="flex-1">
-                  <div className="font-medium">{lang.nativeName}</div>
-                  <div className="text-xs text-slate-500">{lang.name}</div>
+                <span className="flex-shrink-0">{lang.flag}</span>
+
+                <div className="flex-1 min-w-0">
+                  <div className="truncate">
+                    {lang.nativeName}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {lang.name}
+                  </div>
                 </div>
-                {language === code && (
-                  <svg className="h-5 w-5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
               </button>
             ))}
           </div>
